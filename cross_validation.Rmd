@@ -217,12 +217,24 @@ cv_df =
   mutate(
     linear_mod  = map(train, \(df) lm(armc ~ weight, data = df)),
     pwl_mod     = map(train, \(df) lm(armc ~ weight + weight_cp7, data = df)),
-    smooth_mod  = map(train, \(df) mgcv::gam(armc ~ s(weight), data = as_tibble(df)))
+    smooth_mod  = map(train, \(df) mgcv::gam(armc ~ s(weight), data = df))
     )|> 
   mutate(
     rmse_linear = map2_dbl(linear_mod, test, rmse),
-    rmse_linear = map2_dbl(pwl_mod, test, rmse),
-    rmse_linear = map2_dbl(smooth_mod, test, rmse)
+    rmse_pwl = map2_dbl(pwl_mod, test, rmse),
+    rmse_smooth = map2_dbl(smooth_mod, test, rmse)
   )
+```
+
+```{r}
+cv_df |> 
+  select(starts_with("rmse")) |> 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") |> 
+  ggplot(aes(x = model, y = rmse)) + 
+  geom_violin()
 ```
 

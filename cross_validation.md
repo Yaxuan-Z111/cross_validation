@@ -100,19 +100,19 @@ train_df |>
 rmse(linear_mod, test_df)
 ```
 
-    ## [1] 0.1173234
+    ## [1] 0.1251753
 
 ``` r
 rmse(smooth_mod, test_df)
 ```
 
-    ## [1] 0.07874896
+    ## [1] 0.06570813
 
 ``` r
 rmse(wiggly_mod, test_df)
 ```
 
-    ## [1] 0.08948016
+    ## [1] 0.06436572
 
 now cross validation
 
@@ -136,8 +136,8 @@ cv_df |> pull(train) |> nth(3)
     ##    <dbl>    <dbl> <int>
     ##  1   390  -0.0504     1
     ##  2   391  -0.0601     2
-    ##  3   393  -0.0419     3
-    ##  4   394  -0.0510     4
+    ##  3   394  -0.0510     4
+    ##  4   396  -0.0599     5
     ##  5   397  -0.0284     6
     ##  6   399  -0.0596     7
     ##  7   400  -0.0399     8
@@ -282,11 +282,25 @@ cv_df =
   mutate(
     linear_mod  = map(train, \(df) lm(armc ~ weight, data = df)),
     pwl_mod     = map(train, \(df) lm(armc ~ weight + weight_cp7, data = df)),
-    smooth_mod  = map(train, \(df) mgcv::gam(armc ~ s(weight), data = as_tibble(df)))
+    smooth_mod  = map(train, \(df) mgcv::gam(armc ~ s(weight), data = df))
     )|> 
   mutate(
     rmse_linear = map2_dbl(linear_mod, test, rmse),
-    rmse_linear = map2_dbl(pwl_mod, test, rmse),
-    rmse_linear = map2_dbl(smooth_mod, test, rmse)
+    rmse_pwl = map2_dbl(pwl_mod, test, rmse),
+    rmse_smooth = map2_dbl(smooth_mod, test, rmse)
   )
 ```
+
+``` r
+cv_df |> 
+  select(starts_with("rmse")) |> 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") |> 
+  ggplot(aes(x = model, y = rmse)) + 
+  geom_violin()
+```
+
+![](cross_validation_files/figure-gfm/unnamed-chunk-27-1.png)<!-- -->
