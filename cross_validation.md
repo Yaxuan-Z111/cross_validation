@@ -100,19 +100,21 @@ train_df |>
 rmse(linear_mod, test_df)
 ```
 
-    ## [1] 0.147218
+    ## [1] 0.1173234
 
 ``` r
 rmse(smooth_mod, test_df)
 ```
 
-    ## [1] 0.0960852
+    ## [1] 0.07874896
 
 ``` r
 rmse(wiggly_mod, test_df)
 ```
 
-    ## [1] 0.1020546
+    ## [1] 0.08948016
+
+now cross validation
 
 ``` r
 cv_df = 
@@ -136,10 +138,10 @@ cv_df |> pull(train) |> nth(3)
     ##  2   391  -0.0601     2
     ##  3   393  -0.0419     3
     ##  4   394  -0.0510     4
-    ##  5   399  -0.0596     7
-    ##  6   400  -0.0399     8
-    ##  7   402  -0.0294     9
-    ##  8   403  -0.0395    10
+    ##  5   397  -0.0284     6
+    ##  6   399  -0.0596     7
+    ##  7   400  -0.0399     8
+    ##  8   402  -0.0294     9
     ##  9   405  -0.0476    11
     ## 10   406  -0.0604    12
     ## # ℹ 166 more rows
@@ -210,3 +212,81 @@ cv_df |>
 ```
 
 ![](cross_validation_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
+
+``` r
+growth_df = read_csv("nepalese_children.csv")
+```
+
+    ## Rows: 2705 Columns: 5
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## dbl (5): age, sex, weight, height, armc
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
+growth_df |> 
+  ggplot(aes(x = weight, y = armc)) + 
+  geom_point(alpha = .5)
+```
+
+![](cross_validation_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
+
+``` r
+growth_df = 
+  growth_df |>
+  mutate(weight_cp7 = (weight > 7) * (weight - 7))
+```
+
+``` r
+linear_mod = lm(armc ~ weight, data = growth_df)
+pwl_mod    = lm(armc ~ weight + weight_cp7, data = growth_df)
+smooth_mod = mgcv::gam(armc ~ s(weight), data = growth_df)
+```
+
+``` r
+growth_df |>
+  add_predictions(pwl_mod) |>
+  ggplot(aes(x = weight, y = armc)) + 
+  geom_point(alpha = .5) +
+  geom_line(aes(y = pred), color = "red")
+```
+
+![](cross_validation_files/figure-gfm/unnamed-chunk-23-1.png)<!-- -->
+
+``` r
+growth_df |> 
+  gather_predictions(linear_mod, pwl_mod, smooth_mod) |> 
+  mutate(model = fct_inorder(model)) |> 
+  ggplot(aes(x = weight, y = armc)) + 
+  geom_point(alpha = .5) +
+  geom_line(aes(y = pred), color = "red") + 
+  facet_grid(~model)
+```
+
+![](cross_validation_files/figure-gfm/unnamed-chunk-24-1.png)<!-- -->
+Now cross validation
+
+``` r
+cv_df =
+  crossv_mc(growth_df, 100) |> 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble))
+```
+
+``` r
+cv_df = 
+  cv_df |> 
+  mutate(
+    linear_mod  = map(train, \(df) lm(armc ~ weight, data = df)),
+    pwl_mod     = map(train, \(df) lm(armc ~ weight + weight_cp7, data = df)),
+    smooth_mod  = map(train, \(df) mgcv::gam(armc ~ s(weight), data = as_tibble(df)))
+    )|> 
+  mutate(
+    rmse_linear = map2_dbl(linear_mod, test, rmse),
+    rmse_linear = map2_dbl(pwl_mod, test, rmse),
+    rmse_linear = map2_dbl(smooth_mod, test, rmse)
+  )
+```

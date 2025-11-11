@@ -9,6 +9,7 @@ output: github_document
 library(tidyverse)
 library(modelr)
 library(mgcv)
+library(readr)
 library(p8105.datasets)
 ```
 
@@ -97,7 +98,7 @@ rmse(linear_mod, test_df)
 rmse(smooth_mod, test_df)
 rmse(wiggly_mod, test_df)
 ```
-
+now cross validation
 ```{r}
 cv_df = 
   crossv_mc(lidar_df, 100) |>
@@ -159,5 +160,69 @@ cv_df |>
     names_prefix = "rmse_") |> 
   mutate(model = fct_inorder(model)) |> 
   ggplot(aes(x = model, y = rmse)) + geom_violin()
+```
+
+
+```{r}
+growth_df = read_csv("nepalese_children.csv")
+```
+
+```{r}
+growth_df |> 
+  ggplot(aes(x = weight, y = armc)) + 
+  geom_point(alpha = .5)
+```
+
+```{r}
+growth_df = 
+  growth_df |>
+  mutate(weight_cp7 = (weight > 7) * (weight - 7))
+```
+
+```{r}
+linear_mod = lm(armc ~ weight, data = growth_df)
+pwl_mod    = lm(armc ~ weight + weight_cp7, data = growth_df)
+smooth_mod = mgcv::gam(armc ~ s(weight), data = growth_df)
+```
+
+```{r}
+growth_df |>
+  add_predictions(pwl_mod) |>
+  ggplot(aes(x = weight, y = armc)) + 
+  geom_point(alpha = .5) +
+  geom_line(aes(y = pred), color = "red")
+```
+
+```{r}
+growth_df |> 
+  gather_predictions(linear_mod, pwl_mod, smooth_mod) |> 
+  mutate(model = fct_inorder(model)) |> 
+  ggplot(aes(x = weight, y = armc)) + 
+  geom_point(alpha = .5) +
+  geom_line(aes(y = pred), color = "red") + 
+  facet_grid(~model)
+```
+Now cross validation
+```{r}
+cv_df =
+  crossv_mc(growth_df, 100) |> 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble))
+```
+
+```{r}
+cv_df = 
+  cv_df |> 
+  mutate(
+    linear_mod  = map(train, \(df) lm(armc ~ weight, data = df)),
+    pwl_mod     = map(train, \(df) lm(armc ~ weight + weight_cp7, data = df)),
+    smooth_mod  = map(train, \(df) mgcv::gam(armc ~ s(weight), data = as_tibble(df)))
+    )|> 
+  mutate(
+    rmse_linear = map2_dbl(linear_mod, test, rmse),
+    rmse_linear = map2_dbl(pwl_mod, test, rmse),
+    rmse_linear = map2_dbl(smooth_mod, test, rmse)
+  )
 ```
 
