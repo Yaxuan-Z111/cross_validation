@@ -1,0 +1,142 @@
+---
+title: "cross_validation"
+author: "yz5248"
+date: "2025-11-11"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(modelr)
+library(mgcv)
+library(p8105.datasets)
+```
+
+```{r}
+data("lidar")
+
+lidar_df = 
+  lidar |> 
+  as_tibble() |>
+  mutate(id = row_number())
+
+lidar_df |> 
+  ggplot(aes(x = range, y = logratio)) + 
+  geom_point()
+```
+
+# create dataframe
+```{r}
+train_df = 
+  sample_frac(lidar_df, size = .8) |>
+  arrange(id)
+
+test_df = anti_join(lidar_df, train_df, by = "id")
+```
+
+```{r}
+linear_mod = lm(logratio ~ range, data = train_df)
+```
+
+```{r}
+train_df |>
+  add_predictions(linear_mod) |>
+  ggplot(aes(x = range, y = logratio)) +
+  geom_point() +
+  geom_line(aes(y = pred), color = "red")
+```
+
+```{r}
+smooth_mod = mgcv::gam(logratio ~ s(range), data = train_df)
+```
+
+```{r}
+train_df |>
+  add_predictions(smooth_mod) |>
+  ggplot(aes(x = range, y = logratio)) +
+  geom_point() +
+  geom_line(aes(y = pred), color = "red")
+```
+
+```{r}
+wiggly_mod = mgcv::gam(logratio ~ s(range, k = 30), sp = 10e-6, data = train_df)
+```
+
+```{r}
+train_df |>
+  add_predictions(wiggly_mod) |>
+  ggplot(aes(x = range, y = logratio)) +
+  geom_point() +
+  geom_line(aes(y = pred), color = "red")
+```
+
+```{r}
+wiggly_mod2 = mgcv::gam(logratio ~ s(range, k = 50), sp = 10e-8, data = train_df)
+```
+
+```{r}
+train_df |>
+  add_predictions(wiggly_mod2) |>
+  ggplot(aes(x = range, y = logratio)) +
+  geom_point() +
+  geom_line(aes(y = pred), color = "red")
+```
+
+```{r}
+train_df |> 
+  gather_predictions(linear_mod, smooth_mod, wiggly_mod) |> 
+  mutate(model = fct_inorder(model)) |> 
+  ggplot(aes(x = range, y = logratio)) + 
+  geom_point() + 
+  geom_line(aes(y = pred), color = "red") + 
+  facet_wrap(~model)
+```
+
+```{r}
+rmse(linear_mod, test_df)
+rmse(smooth_mod, test_df)
+rmse(wiggly_mod, test_df)
+```
+
+```{r}
+cv_df = 
+  crossv_mc(lidar_df, 100) |>
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)
+  )
+```
+did this work? Yes!
+
+```{r}
+cv_df |> pull(train) |> nth(3)
+```
+
+let's fit the model over and over
+```{r}
+lidar_lm = function(df){
+  lm(logratio ~ range, data = df)
+}
+  
+```
+
+```{r}
+cv_df |>
+  mutate(
+    linear_fits = map(train, \(df) lm(logratio ~ range, data = df))
+  ) |>
+  mutate(
+    rmse_linear = map2(linear_fits, test, rmse)
+  )
+```
+
+```{r}
+cv_df |>
+  mutate(
+    linear_fits = map(train, \(df) lm(logratio ~ range, data = df))
+  ) |>
+  mutate(
+    rmse_linear = map2_dbl(linear_fits, test, rmse)
+  )
+```
+
