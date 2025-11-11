@@ -123,20 +123,41 @@ lidar_lm = function(df){
 ```{r}
 cv_df |>
   mutate(
-    linear_fits = map(train, \(df) lm(logratio ~ range, data = df))
+    linear_fits = map(train, \(df) lm(logratio ~ range, data = df)),
+    smooth_fits  = map(train, \(df) mgcv::gam(logratio ~ s(range), data = df)),
+    wiggly_fits  = map(train, \(df) mgcv::gam(logratio ~ s(range, k = 50), sp = 10e-8, data = df))
   ) |>
   mutate(
-    rmse_linear = map2(linear_fits, test, rmse)
+    rmse_linear = map2(linear_fits, test, rmse),
+    rmse_linear = map2(smooth_fits, test, rmse),
+    rmse_linear = map2(wiggly_fits, test, rmse)
   )
 ```
 
 ```{r}
-cv_df |>
+cv_df = 
+  cv_df |> 
   mutate(
-    linear_fits = map(train, \(df) lm(logratio ~ range, data = df))
-  ) |>
+    linear_mod  = map(train, \(df) lm(logratio ~ range, data = df)),
+    smooth_mod  = map(train, \(df) gam(logratio ~ s(range), data = df)),
+    wiggly_mod  = map(train, \(df) gam(logratio ~ s(range, k = 50), sp = 10e-8, data = df))) |> 
   mutate(
-    rmse_linear = map2_dbl(linear_fits, test, rmse)
-  )
+    rmse_linear = map2_dbl(linear_mod, test, \(mod, df) rmse(model = mod, data = df)),
+    rmse_smooth = map2_dbl(smooth_mod, test, \(mod, df) rmse(model = mod, data = df)),
+    rmse_wiggly = map2_dbl(wiggly_mod, test, \(mod, df) rmse(model = mod, data = df))
+    )
+```
+
+try to look at this better
+```{r}
+cv_df |> 
+  select(starts_with("rmse")) |> 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") |> 
+  mutate(model = fct_inorder(model)) |> 
+  ggplot(aes(x = model, y = rmse)) + geom_violin()
 ```
 

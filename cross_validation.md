@@ -100,19 +100,19 @@ train_df |>
 rmse(linear_mod, test_df)
 ```
 
-    ## [1] 0.136171
+    ## [1] 0.147218
 
 ``` r
 rmse(smooth_mod, test_df)
 ```
 
-    ## [1] 0.09012073
+    ## [1] 0.0960852
 
 ``` r
 rmse(wiggly_mod, test_df)
 ```
 
-    ## [1] 0.09891565
+    ## [1] 0.1020546
 
 ``` r
 cv_df = 
@@ -136,12 +136,12 @@ cv_df |> pull(train) |> nth(3)
     ##  2   391  -0.0601     2
     ##  3   393  -0.0419     3
     ##  4   394  -0.0510     4
-    ##  5   396  -0.0599     5
-    ##  6   397  -0.0284     6
+    ##  5   399  -0.0596     7
+    ##  6   400  -0.0399     8
     ##  7   402  -0.0294     9
     ##  8   403  -0.0395    10
-    ##  9   408  -0.0312    13
-    ## 10   409  -0.0382    14
+    ##  9   405  -0.0476    11
+    ## 10   406  -0.0604    12
     ## # ℹ 166 more rows
 
 let’s fit the model over and over
@@ -155,49 +155,58 @@ lidar_lm = function(df){
 ``` r
 cv_df |>
   mutate(
-    linear_fits = map(train, \(df) lm(logratio ~ range, data = df))
+    linear_fits = map(train, \(df) lm(logratio ~ range, data = df)),
+    smooth_fits  = map(train, \(df) mgcv::gam(logratio ~ s(range), data = df)),
+    wiggly_fits  = map(train, \(df) mgcv::gam(logratio ~ s(range, k = 50), sp = 10e-8, data = df))
   ) |>
   mutate(
-    rmse_linear = map2(linear_fits, test, rmse)
+    rmse_linear = map2(linear_fits, test, rmse),
+    rmse_linear = map2(smooth_fits, test, rmse),
+    rmse_linear = map2(wiggly_fits, test, rmse)
   )
 ```
 
-    ## # A tibble: 100 × 5
-    ##    train              test              .id   linear_fits rmse_linear
-    ##    <list>             <list>            <chr> <list>      <list>     
-    ##  1 <tibble [176 × 3]> <tibble [45 × 3]> 001   <lm>        <dbl [1]>  
-    ##  2 <tibble [176 × 3]> <tibble [45 × 3]> 002   <lm>        <dbl [1]>  
-    ##  3 <tibble [176 × 3]> <tibble [45 × 3]> 003   <lm>        <dbl [1]>  
-    ##  4 <tibble [176 × 3]> <tibble [45 × 3]> 004   <lm>        <dbl [1]>  
-    ##  5 <tibble [176 × 3]> <tibble [45 × 3]> 005   <lm>        <dbl [1]>  
-    ##  6 <tibble [176 × 3]> <tibble [45 × 3]> 006   <lm>        <dbl [1]>  
-    ##  7 <tibble [176 × 3]> <tibble [45 × 3]> 007   <lm>        <dbl [1]>  
-    ##  8 <tibble [176 × 3]> <tibble [45 × 3]> 008   <lm>        <dbl [1]>  
-    ##  9 <tibble [176 × 3]> <tibble [45 × 3]> 009   <lm>        <dbl [1]>  
-    ## 10 <tibble [176 × 3]> <tibble [45 × 3]> 010   <lm>        <dbl [1]>  
+    ## # A tibble: 100 × 7
+    ##    train    test     .id   linear_fits smooth_fits wiggly_fits rmse_linear
+    ##    <list>   <list>   <chr> <list>      <list>      <list>      <list>     
+    ##  1 <tibble> <tibble> 001   <lm>        <gam>       <gam>       <dbl [1]>  
+    ##  2 <tibble> <tibble> 002   <lm>        <gam>       <gam>       <dbl [1]>  
+    ##  3 <tibble> <tibble> 003   <lm>        <gam>       <gam>       <dbl [1]>  
+    ##  4 <tibble> <tibble> 004   <lm>        <gam>       <gam>       <dbl [1]>  
+    ##  5 <tibble> <tibble> 005   <lm>        <gam>       <gam>       <dbl [1]>  
+    ##  6 <tibble> <tibble> 006   <lm>        <gam>       <gam>       <dbl [1]>  
+    ##  7 <tibble> <tibble> 007   <lm>        <gam>       <gam>       <dbl [1]>  
+    ##  8 <tibble> <tibble> 008   <lm>        <gam>       <gam>       <dbl [1]>  
+    ##  9 <tibble> <tibble> 009   <lm>        <gam>       <gam>       <dbl [1]>  
+    ## 10 <tibble> <tibble> 010   <lm>        <gam>       <gam>       <dbl [1]>  
     ## # ℹ 90 more rows
 
 ``` r
-cv_df |>
+cv_df = 
+  cv_df |> 
   mutate(
-    linear_fits = map(train, \(df) lm(logratio ~ range, data = df))
-  ) |>
+    linear_mod  = map(train, \(df) lm(logratio ~ range, data = df)),
+    smooth_mod  = map(train, \(df) gam(logratio ~ s(range), data = df)),
+    wiggly_mod  = map(train, \(df) gam(logratio ~ s(range, k = 50), sp = 10e-8, data = df))) |> 
   mutate(
-    rmse_linear = map2_dbl(linear_fits, test, rmse)
-  )
+    rmse_linear = map2_dbl(linear_mod, test, \(mod, df) rmse(model = mod, data = df)),
+    rmse_smooth = map2_dbl(smooth_mod, test, \(mod, df) rmse(model = mod, data = df)),
+    rmse_wiggly = map2_dbl(wiggly_mod, test, \(mod, df) rmse(model = mod, data = df))
+    )
 ```
 
-    ## # A tibble: 100 × 5
-    ##    train              test              .id   linear_fits rmse_linear
-    ##    <list>             <list>            <chr> <list>            <dbl>
-    ##  1 <tibble [176 × 3]> <tibble [45 × 3]> 001   <lm>              0.152
-    ##  2 <tibble [176 × 3]> <tibble [45 × 3]> 002   <lm>              0.130
-    ##  3 <tibble [176 × 3]> <tibble [45 × 3]> 003   <lm>              0.124
-    ##  4 <tibble [176 × 3]> <tibble [45 × 3]> 004   <lm>              0.131
-    ##  5 <tibble [176 × 3]> <tibble [45 × 3]> 005   <lm>              0.151
-    ##  6 <tibble [176 × 3]> <tibble [45 × 3]> 006   <lm>              0.110
-    ##  7 <tibble [176 × 3]> <tibble [45 × 3]> 007   <lm>              0.134
-    ##  8 <tibble [176 × 3]> <tibble [45 × 3]> 008   <lm>              0.140
-    ##  9 <tibble [176 × 3]> <tibble [45 × 3]> 009   <lm>              0.138
-    ## 10 <tibble [176 × 3]> <tibble [45 × 3]> 010   <lm>              0.136
-    ## # ℹ 90 more rows
+try to look at this better
+
+``` r
+cv_df |> 
+  select(starts_with("rmse")) |> 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") |> 
+  mutate(model = fct_inorder(model)) |> 
+  ggplot(aes(x = model, y = rmse)) + geom_violin()
+```
+
+![](cross_validation_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
